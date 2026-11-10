@@ -61,12 +61,18 @@ parser MyParser(packet_in packet,
         packet.extract(hdr.ethernet);
         transition select(hdr.ethernet.etherType) {
             TYPE_IPV4: parse_ipv4;
-            // TODO (Step 4): send TYPE_MYTUNNEL packets to a parse_myTunnel state
+            TYPE_MYTUNNEL: parse_myTunnel;
             default: accept;
         }
     }
 
-    // TODO (Step 4): add the parse_myTunnel state here
+    state parse_myTunnel {
+    packet.extract(hdr.myTunnel);
+    transition select(hdr.myTunnel.proto_id) {
+        TYPE_IPV4: parse_ipv4;
+        default: accept;
+    }
+}
 
     state parse_ipv4 {
         packet.extract(hdr.ipv4);
@@ -114,8 +120,9 @@ control MyIngress(inout headers hdr,
     }
 
     apply {
-        // TODO (Step 5): tunnelled packets should use myTunnel_exact instead
-        if (hdr.ipv4.isValid()) {
+        if (hdr.myTunnel.isValid()) {
+            myTunnel_exact.apply();
+        } else if (hdr.ipv4.isValid()) {
             ipv4_lpm.apply();
         } else {
             drop();
@@ -151,7 +158,7 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
 control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
-        // TODO (Step 4): emit the tunnel header (only valid headers are written)
+        packet.emit(hdr.myTunnel);
         packet.emit(hdr.ipv4);
     }
 }
