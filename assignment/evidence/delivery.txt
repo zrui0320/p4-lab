@@ -1,0 +1,166 @@
+*** Compiling tunnel.p4
+*** Configuring hosts
+h1 h2 h3 
+*** Starting controller
+*** Starting 2 switches
+s1 s2 
+*** s1: 6 table entries added
+*** s2: 6 table entries added
+*** Your hosts: h1 10.40.0.1, h2 10.40.0.2, h3 10.40.0.3
+*** Ready. Switch logs: logs/s1.txt, logs/s2.txt. What h2 and h3 receive: logs/h2.txt, logs/h3.txt
+*** Starting CLI:
+mininet> h1 python3 send.py 10.40.0.2 "to h2" --tunnel 2
+###[ Ethernet ]### 
+  dst       = ff:ff:ff:ff:ff:ff
+  src       = 00:00:00:00:00:01
+  type      = 0x1212
+###[ MyTunnel ]### 
+     proto_id  = 2048
+     dst_id    = 2
+     hop_limit = 8
+###[ IP ]### 
+        version   = 4
+        ihl       = 5
+        tos       = 0x0
+        len       = 33
+        id        = 1
+        flags     = 
+        frag      = 0
+        ttl       = 64
+        proto     = udp
+        chksum    = 0x6679
+        src       = 10.40.0.1
+        dst       = 10.40.0.2
+        \options   \
+###[ UDP ]### 
+           sport     = 4321
+           dport     = 4321
+           len       = 13
+           chksum    = 0x2e8
+###[ Raw ]### 
+              load      = 'to h2'
+Sent from h1-eth0.
+mininet> h1 python3 send.py 10.40.0.3 "to h3" --tunnel 3
+###[ Ethernet ]### 
+  dst       = ff:ff:ff:ff:ff:ff
+  src       = 00:00:00:00:00:01
+  type      = 0x1212
+###[ MyTunnel ]### 
+     proto_id  = 2048
+     dst_id    = 3
+     hop_limit = 8
+###[ IP ]### 
+        version   = 4
+        ihl       = 5
+        tos       = 0x0
+        len       = 33
+        id        = 1
+        flags     = 
+        frag      = 0
+        ttl       = 64
+        proto     = udp
+        chksum    = 0x6678
+        src       = 10.40.0.1
+        dst       = 10.40.0.3
+        \options   \
+###[ UDP ]### 
+           sport     = 4321
+           dport     = 4321
+           len       = 13
+           chksum    = 0x1e7
+###[ Raw ]### 
+              load      = 'to h3'
+Sent from h1-eth0.
+mininet> h1 python3 send.py 10.40.0.3 "to h3, 5 hops" --tunnel 3 --hops 5
+###[ Ethernet ]### 
+  dst       = ff:ff:ff:ff:ff:ff
+  src       = 00:00:00:00:00:01
+  type      = 0x1212
+###[ MyTunnel ]### 
+     proto_id  = 2048
+     dst_id    = 3
+     hop_limit = 5
+###[ IP ]### 
+        version   = 4
+        ihl       = 5
+        tos       = 0x0
+        len       = 41
+        id        = 1
+        flags     = 
+        frag      = 0
+        ttl       = 64
+        proto     = udp
+        chksum    = 0x6670
+        src       = 10.40.0.1
+        dst       = 10.40.0.3
+        \options   \
+###[ UDP ]### 
+           sport     = 4321
+           dport     = 4321
+           len       = 21
+           chksum    = 0xde9c
+###[ Raw ]### 
+              load      = 'to h3, 5 hops'
+Sent from h1-eth0.
+mininet> sh sleep 1; cat logs/h2.txt logs/h3.txt
+Listening on h2-eth0...
+Received (tunnelled, dst_id=2, hop_limit=6) from 10.40.0.1 to 10.40.0.2, TTL 64: 'to h2'
+Listening on h3-eth0...
+Received (tunnelled, dst_id=3, hop_limit=6) from 10.40.0.1 to 10.40.0.3, TTL 64: 'to h3'
+Received (tunnelled, dst_id=3, hop_limit=3) from 10.40.0.1 to 10.40.0.3, TTL 64: 'to h3, 5 hops'
+mininet> h1 ping -c 2 h3
+PING 10.40.0.3 (10.40.0.3) 56(84) bytes of data.
+64 bytes from 10.40.0.3: icmp_seq=1 ttl=62 time=10.0 ms
+64 bytes from 10.40.0.3: icmp_seq=2 ttl=62 time=10.6 ms
+--- 10.40.0.3 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1002ms
+rtt min/avg/max/mdev = 10.030/10.336/10.643/0.306 ms
+mininet> h1 python3 send.py 10.40.0.2 "only 1 hop" --tunnel 2 --hops 1
+###[ Ethernet ]### 
+  dst       = ff:ff:ff:ff:ff:ff
+  src       = 00:00:00:00:00:01
+  type      = 0x1212
+###[ MyTunnel ]### 
+     proto_id  = 2048
+     dst_id    = 2
+     hop_limit = 1
+###[ IP ]### 
+        version   = 4
+        ihl       = 5
+        tos       = 0x0
+        len       = 38
+        id        = 1
+        flags     = 
+        frag      = 0
+        ttl       = 64
+        proto     = udp
+        chksum    = 0x6674
+        src       = 10.40.0.1
+        dst       = 10.40.0.2
+        \options   \
+###[ UDP ]### 
+           sport     = 4321
+           dport     = 4321
+           len       = 18
+           chksum    = 0x3dc4
+###[ Raw ]### 
+              load      = 'only 1 hop'
+Sent from h1-eth0.
+mininet> sh sleep 1; cat logs/h2.txt; grep -c "Processing packet received" logs/s1.txt logs/s2.txt; grep -E "Condition .*hop_limit|mark_to_drop|Egress port is" logs/s2.txt | tail -4
+Listening on h2-eth0...
+Received (tunnelled, dst_id=2, hop_limit=6) from 10.40.0.1 to 10.40.0.2, TTL 64: 'to h2'
+logs/s1.txt:8
+logs/s2.txt:8
+[10:41:39.861] [bmv2] [D] [thread 33047] [6.0] [cxt 0] Egress port is 1
+[10:41:54.440] [bmv2] [T] [thread 33047] [7.0] [cxt 0] tunnel.p4(129) Condition "hdr.myTunnel.hop_limit == 0" (node_3) is true
+[10:41:54.440] [bmv2] [T] [thread 33047] [7.0] [cxt 0] tunnel.p4(99) Primitive mark_to_drop(standard_metadata)
+[10:41:54.440] [bmv2] [D] [thread 33047] [7.0] [cxt 0] Egress port is 511
+mininet> exit
+*** Stopping 0 controllers
+*** Stopping 4 links
+....
+*** Stopping 2 switches
+s1 s2 
+*** Stopping 3 hosts
+h1 h2 h3 
+*** Done

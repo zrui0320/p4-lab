@@ -3,6 +3,8 @@
  * As supplied, this program forwards IPv4 by longest-prefix match. The tunnel header, its
  * table and its action are already declared; Steps 4–6 of the lab connect them to the
  * parser, the ingress control and the deparser. Look for the TODO comments.
+ *
+ * Assignment: the tunnel header now carries a hop limit, so a tunnel loop ends.
  */
 #include <core.p4>
 #include <v1model.p4>
@@ -25,6 +27,7 @@ header ethernet_t {
 header myTunnel_t {
     bit<16> proto_id;   // what follows the tunnel header, like etherType (0x0800: IPv4)
     bit<16> dst_id;     // which tunnel exit to deliver to: 1 = h1, 2 = h2, 3 = h3
+    bit<8>  hop_limit;  // how many more switches the packet may cross; 0 = drop at the next one
 }
 
 header ipv4_t {
@@ -121,7 +124,14 @@ control MyIngress(inout headers hdr,
 
     apply {
         if (hdr.myTunnel.isValid()) {
-            myTunnel_exact.apply();
+            // Check the hop limit before any forwarding decision: a packet that has
+            // used up its budget is dropped here, whatever its dst_id says.
+            if (hdr.myTunnel.hop_limit == 0) {
+                drop();
+            } else {
+                hdr.myTunnel.hop_limit = hdr.myTunnel.hop_limit - 1;
+                myTunnel_exact.apply();
+            }
         } else if (hdr.ipv4.isValid()) {
             ipv4_lpm.apply();
         } else {

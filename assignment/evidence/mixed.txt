@@ -1,0 +1,151 @@
+*** Compiling tunnel.p4
+*** Compiling tunnel_v1.p4
+*** Configuring hosts
+h1 h2 h3 
+*** Starting controller
+*** Starting 2 switches
+s1 s2 
+*** s1: 6 table entries added
+*** s2: 6 table entries added
+*** Your hosts: h1 10.40.0.1, h2 10.40.0.2, h3 10.40.0.3
+*** Mixed rollout: s1 runs tunnel.p4, s2 runs tunnel_v1.p4
+*** Ready. Switch logs: logs/s1.txt, logs/s2.txt. What h2 and h3 receive: logs/h2.txt, logs/h3.txt
+*** Starting CLI:
+mininet> h2 timeout 8 tcpdump -c 1 -XX -ni h2-eth0 ether proto 0x1212 > logs/h2cap.txt 2>&1 &
+mininet> h1 python3 send.py 10.40.0.3 "mixed" --tunnel 2
+###[ Ethernet ]### 
+  dst       = ff:ff:ff:ff:ff:ff
+  src       = 00:00:00:00:00:01
+  type      = 0x1212
+###[ MyTunnel ]### 
+     proto_id  = 2048
+     dst_id    = 2
+     hop_limit = 8
+###[ IP ]### 
+        version   = 4
+        ihl       = 5
+        tos       = 0x0
+        len       = 33
+        id        = 1
+        flags     = 
+        frag      = 0
+        ttl       = 64
+        proto     = udp
+        chksum    = 0x6678
+        src       = 10.40.0.1
+        dst       = 10.40.0.3
+        \options   \
+###[ UDP ]### 
+           sport     = 4321
+           dport     = 4321
+           len       = 13
+           chksum    = 0x7fef
+###[ Raw ]### 
+              load      = 'mixed'
+Sent from h1-eth0.
+mininet> sh sleep 8; cat logs/h2cap.txt
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on h2-eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+10:44:00.140608 00:00:00:00:00:01 > ff:ff:ff:ff:ff:ff, ethertype Unknown (0x1212), length 52: 
+	0x0000:  ffff ffff ffff 0000 0000 0001 1212 0800  ................
+	0x0010:  0002 0745 0000 2100 0100 0040 0d66 780a  ...E..!....@.fx.
+	0x0020:  2800 010a 2800 0310 e110 e100 0d7f ef6d  (...(..........m
+	0x0030:  6978 6564                                ixed
+1 packet captured
+1 packet received by filter
+0 packets dropped by kernel
+mininet> sh cat logs/h2.txt; grep -E "Processing packet|key is|Bytes parsed|Looking up|dst_id|Egress port|Updating checksum|Transmitting" logs/s2.txt
+Listening on h2-eth0...
+* hdr.myTunnel.dst_id : EXACT     0001
+* hdr.myTunnel.dst_id : EXACT     0002
+* hdr.myTunnel.dst_id : EXACT     0003
+[10:44:00.135] [bmv2] [D] [thread 35748] [0.0] [cxt 0] Processing packet received on port 1
+[10:44:00.136] [bmv2] [D] [thread 35748] [0.0] [cxt 0] Parser state 'start': key is 1212
+[10:44:00.136] [bmv2] [T] [thread 35748] [0.0] [cxt 0] Bytes parsed: 14
+[10:44:00.136] [bmv2] [D] [thread 35748] [0.0] [cxt 0] Parser state 'parse_myTunnel': key is 0800
+[10:44:00.136] [bmv2] [T] [thread 35748] [0.0] [cxt 0] Bytes parsed: 18
+[10:44:00.137] [bmv2] [T] [thread 35748] [0.0] [cxt 0] Bytes parsed: 38
+[10:44:00.138] [bmv2] [D] [thread 35748] [0.0] [cxt 0] Looking up key:
+* hdr.myTunnel.dst_id : 0002
+* hdr.myTunnel.dst_id : EXACT     0002
+[10:44:00.138] [bmv2] [D] [thread 35748] [0.0] [cxt 0] Egress port is 2
+[10:44:00.140] [bmv2] [D] [thread 35751] [0.0] [cxt 0] Updating checksum 'cksum'
+[10:44:00.140] [bmv2] [D] [thread 35753] [0.0] [cxt 0] Transmitting packet of size 52 out of port 2
+mininet> sh ./p4cli s2 table_dump MyIngress.myTunnel_exact | grep -A3 "entry 0x2"
+Dumping entry 0x2
+Match key:
+* myTunnel.dst_id     : EXACT     0003
+Action entry: MyIngress.myTunnel_forward - 03
+mininet> sh ./p4cli s2 "table_modify MyIngress.myTunnel_exact MyIngress.myTunnel_forward 2 1"
+Done
+Modifying entry 2 for exact match table MyIngress.myTunnel_exact
+mininet> sh grep -c "Processing packet received" logs/s1.txt logs/s2.txt
+logs/s1.txt:1
+logs/s2.txt:1
+mininet> h1 python3 send.py 10.40.0.3 "loop" --tunnel 3
+###[ Ethernet ]### 
+  dst       = ff:ff:ff:ff:ff:ff
+  src       = 00:00:00:00:00:01
+  type      = 0x1212
+###[ MyTunnel ]### 
+     proto_id  = 2048
+     dst_id    = 3
+     hop_limit = 8
+###[ IP ]### 
+        version   = 4
+        ihl       = 5
+        tos       = 0x0
+        len       = 32
+        id        = 1
+        flags     = 
+        frag      = 0
+        ttl       = 64
+        proto     = udp
+        chksum    = 0x6679
+        src       = 10.40.0.1
+        dst       = 10.40.0.3
+        \options   \
+###[ UDP ]### 
+           sport     = 4321
+           dport     = 4321
+           len       = 12
+           chksum    = 0xede0
+###[ Raw ]### 
+              load      = 'loop'
+Sent from h1-eth0.
+mininet> sh grep -c "Processing packet received" logs/s1.txt logs/s2.txt
+logs/s1.txt:10
+logs/s2.txt:9
+mininet> sh sleep 5; grep -c "Processing packet received" logs/s1.txt logs/s2.txt
+logs/s1.txt:10
+logs/s2.txt:9
+mininet> sh grep -h -E "hop_limit == 0|Egress port is" logs/s1.txt | sed -E 's/\[bmv2\] \[[DT]\] \[thread [0-9]+\] //; s/\[cxt 0\] //' | tail -20
+[10:44:00.130] [0.0] tunnel.p4(129) Condition "hdr.myTunnel.hop_limit == 0" (node_3) is false
+[10:44:00.131] [0.0] Egress port is 2
+[10:44:45.759] [1.0] tunnel.p4(129) Condition "hdr.myTunnel.hop_limit == 0" (node_3) is false
+[10:44:45.759] [1.0] Egress port is 2
+[10:44:45.761] [2.0] tunnel.p4(129) Condition "hdr.myTunnel.hop_limit == 0" (node_3) is false
+[10:44:45.762] [2.0] Egress port is 2
+[10:44:45.773] [3.0] tunnel.p4(129) Condition "hdr.myTunnel.hop_limit == 0" (node_3) is false
+[10:44:45.773] [3.0] Egress port is 2
+[10:44:45.778] [4.0] tunnel.p4(129) Condition "hdr.myTunnel.hop_limit == 0" (node_3) is false
+[10:44:45.779] [4.0] Egress port is 2
+[10:44:45.782] [5.0] tunnel.p4(129) Condition "hdr.myTunnel.hop_limit == 0" (node_3) is false
+[10:44:45.782] [5.0] Egress port is 2
+[10:44:45.785] [6.0] tunnel.p4(129) Condition "hdr.myTunnel.hop_limit == 0" (node_3) is false
+[10:44:45.786] [6.0] Egress port is 2
+[10:44:45.789] [7.0] tunnel.p4(129) Condition "hdr.myTunnel.hop_limit == 0" (node_3) is false
+[10:44:45.789] [7.0] Egress port is 2
+[10:44:45.794] [8.0] tunnel.p4(129) Condition "hdr.myTunnel.hop_limit == 0" (node_3) is false
+[10:44:45.794] [8.0] Egress port is 2
+[10:44:45.802] [9.0] tunnel.p4(129) Condition "hdr.myTunnel.hop_limit == 0" (node_3) is true
+[10:44:45.802] [9.0] Egress port is 511
+mininet> exit
+*** Stopping 0 controllers
+*** Stopping 4 links
+....
+*** Stopping 2 switches
+s1 s2 
+*** Stopping 3 hosts
+h1 h2 h3 
+*** Done
